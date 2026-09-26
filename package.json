@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "Prototype for voice/text task creation in Yandex Tracker",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "start": "node server.js",
+    "db:migrate": "node scripts/migrate.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.4",
+    "gigachat": "^0.0.20",
+    "pg": "^8.23.0"
+  }
 }

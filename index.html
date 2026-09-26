@@ -37,9 +37,10 @@
         <nav>
           <button class="nav-item active" data-view="create"><span>＋</span> Новая задача</button>
           <button class="nav-item" data-view="history"><span>◷</span> Последние задачи</button>
-          <button class="nav-item" data-view="profiles"><span>⚙</span> Профили маршрутизации</button>
+          <button class="nav-item" data-view="profiles"><span>⚙</span> Настройки по умолчанию</button>
+          <button class="nav-item" data-view="tracker-settings"><span>⌁</span> Подключение</button>
         </nav>
-        <div class="sidebar-footer"><span class="status-dot"></span> Демонстрационный режим</div>
+        <div id="tracker-status" class="sidebar-footer"><span class="status-dot"></span> Tracker не настроен</div>
       </aside>
 
       <section class="workspace">
@@ -66,7 +67,7 @@
               </div>
               <textarea id="source-text" maxlength="3000" placeholder="Например: Нужно согласовать с инфраструктурой стенд для проверки нового каталога услуг, обсудить сроки с Андреем, желательно к следующей пятнице"></textarea>
               <div class="input-footer"><span id="char-count">0 / 3000</span><button id="generate-button" class="primary">Сформировать черновик <span>→</span></button></div>
-              <div class="safe-note"><span>⌁</span> В демо текст обрабатывается локально. Токены и рабочие данные не используются.</div>
+              <div class="safe-note"><span>⌁</span> Текст отправляется в GigaChat только для формирования черновика. Не вводите секреты и рабочие данные без согласования.</div>
             </section>
 
             <aside class="profile-card card">
@@ -91,8 +92,35 @@
         </section>
 
         <section id="profiles-view" class="view" hidden>
-          <div class="section-intro"><h2>Профили маршрутизации</h2><p>Профиль задаёт очередь, обязательную доску и значения по умолчанию.</p></div>
+          <div class="section-intro"><h2>Настройки по умолчанию</h2><p>Выберите проект, доску и спринт, которые будут подставляться в новые задачи.</p></div>
           <div id="profiles-list" class="profiles-list"></div>
+        </section>
+
+        <section id="tracker-settings-view" class="view" hidden>
+          <div class="section-intro"><h2>Подключение Яндекс Трекера</h2><p>Подключение действует для текущего рабочего пространства. OAuth-токен не отображается после сохранения.</p></div>
+          <form id="tracker-connection-form" class="settings-card card">
+            <div class="settings-field">
+              <label for="tracker-org-header">Тип организации</label>
+              <select id="tracker-org-header" name="orgHeader">
+                <option value="X-Org-ID">Яндекс 360 для бизнеса</option>
+                <option value="X-Cloud-Org-ID">Yandex Cloud / Identity Hub</option>
+              </select>
+            </div>
+            <div class="settings-field">
+              <label for="tracker-org-id">Идентификатор организации</label>
+              <input id="tracker-org-id" name="orgId" type="text" maxlength="256" autocomplete="off" required />
+              <small>Откройте в Tracker: «Администрирование → Организации».</small>
+            </div>
+            <div class="settings-field">
+              <label for="tracker-token">OAuth-токен</label>
+              <input id="tracker-token" name="token" type="password" maxlength="4096" autocomplete="off" spellcheck="false" required />
+              <small>Токен передаётся по HTTPS и сохраняется в БД только в зашифрованном виде.</small>
+            </div>
+            <div class="settings-actions"><button class="primary" type="submit">Сохранить подключение</button><button id="test-tracker-button" class="secondary" type="button">Проверить подключение</button><button id="disconnect-tracker-button" class="secondary danger-button" type="button" hidden>Отключить Tracker</button></div>
+            <p id="tracker-connection-error" class="form-error"></p>
+            <p id="tracker-connection-result" class="connection-result" aria-live="polite"></p>
+          </form>
+          <div class="safe-note settings-note"><span>⌁</span> Не передавайте OAuth-токен в чат, письма или скриншоты. Для замены токена сохраните новое значение.</div>
         </section>
       </section>
     </main>
