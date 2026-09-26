@@ -1,0 +1,8 @@
+{
+  "name": "task-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype for voice/text task creation in Yandex Tracker",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" }
+}

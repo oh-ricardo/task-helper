@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Helper — черновик задачи</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <section id="auth-gate" class="auth-gate" aria-live="polite">
+      <form id="setup-form" class="auth-card" hidden>
+        <div class="auth-logo"><span class="brand-mark">✓</span> Task Helper</div>
+        <p class="eyebrow">Первый вход</p>
+        <h1>Установите пароль</h1>
+        <p>Он защитит доступ к вашему рабочему пространству на этом сервере.</p>
+        <label for="setup-password">Пароль</label>
+        <input id="setup-password" type="password" autocomplete="new-password" minlength="12" required />
+        <label for="setup-confirm">Повторите пароль</label>
+        <input id="setup-confirm" type="password" autocomplete="new-password" minlength="12" required />
+        <button class="primary" type="submit">Продолжить <span>→</span></button>
+        <p class="form-error" id="setup-error"></p>
+      </form>
+      <form id="login-form" class="auth-card" hidden>
+        <div class="auth-logo"><span class="brand-mark">✓</span> Task Helper</div>
+        <p class="eyebrow">Защищённый вход</p>
+        <h1>Введите пароль</h1>
+        <p>Используйте пароль, установленный при первом входе.</p>
+        <label for="login-password">Пароль</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+        <button class="primary" type="submit">Войти <span>→</span></button>
+        <p class="form-error" id="login-error"></p>
+      </form>
+    </section>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#"><span class="brand-mark">✓</span> Task Helper</a>
+        <nav>
+          <button class="nav-item active" data-view="create"><span>＋</span> Новая задача</button>
+          <button class="nav-item" data-view="history"><span>◷</span> Последние задачи</button>
+          <button class="nav-item" data-view="profiles"><span>⚙</span> Профили маршрутизации</button>
+        </nav>
+        <div class="sidebar-footer"><span class="status-dot"></span> Демонстрационный режим</div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Яндекс Трекер</p>
+            <h1 id="page-title">Новая задача</h1>
+          </div>
+          <div class="header-actions"><button id="profile-button" class="profile-button" aria-label="Выбрать профиль">Инфраструктура <span>⌄</span></button><button id="logout-button" class="logout-button">Выйти</button></div>
+        </header>
+
+        <section id="create-view" class="view">
+          <div class="workflow" aria-label="Этапы создания задачи">
+            <span class="workflow-step current"><b>1</b> Описание</span><i></i>
+            <span class="workflow-step"><b>2</b> Проверка</span><i></i>
+            <span class="workflow-step"><b>3</b> Создание</span>
+          </div>
+
+          <div class="create-grid">
+            <section class="input-card card">
+              <div class="card-heading">
+                <div><h2>Опишите задачу</h2><p>Напишите так, как сказали бы коллеге.</p></div>
+                <span class="voice-off">Голосовой ввод выключен</span>
+              </div>
+              <textarea id="source-text" maxlength="3000" placeholder="Например: Нужно согласовать с инфраструктурой стенд для проверки нового каталога услуг, обсудить сроки с Андреем, желательно к следующей пятнице"></textarea>
+              <div class="input-footer"><span id="char-count">0 / 3000</span><button id="generate-button" class="primary">Сформировать черновик <span>→</span></button></div>
+              <div class="safe-note"><span>⌁</span> В демо текст обрабатывается локально. Токены и рабочие данные не используются.</div>
+            </section>
+
+            <aside class="profile-card card">
+              <p class="eyebrow">Маршрутизация</p>
+              <h2 id="profile-name">Инфраструктура</h2>
+              <dl>
+                <div><dt>Очередь</dt><dd id="profile-queue">INFRA</dd></div>
+                <div><dt>Доска</dt><dd id="profile-board">Платформа · Канбан</dd></div>
+                <div><dt>Часовой пояс</dt><dd>Europe/Moscow</dd></div>
+              </dl>
+              <button class="text-button" data-view="profiles">Настроить профиль →</button>
+            </aside>
+          </div>
+
+          <section id="empty-state" class="empty-state"><div class="empty-icon">✦</div><h2>Черновик появится здесь</h2><p>Мы выделим поля из текста, применим профиль и попросим уточнить только обязательные данные.</p></section>
+          <section id="draft-area" hidden></section>
+        </section>
+
+        <section id="history-view" class="view" hidden>
+          <div class="section-intro"><h2>Последние задачи</h2><p>Созданные через сервис задачи и сохранённые черновики.</p></div>
+          <div id="history-list" class="history-list"></div>
+        </section>
+
+        <section id="profiles-view" class="view" hidden>
+          <div class="section-intro"><h2>Профили маршрутизации</h2><p>Профиль задаёт очередь, обязательную доску и значения по умолчанию.</p></div>
+          <div id="profiles-list" class="profiles-list"></div>
+        </section>
+      </section>
+    </main>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
