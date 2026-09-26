@@ -12,9 +12,20 @@ let trackerCatalog = null;
 let trackerSprints = [];
 let trackerDefaults = { queueKey: '', projectId: '', boardId: '', sprintId: '' };
 let trackerRoutingError = '';
-let created = JSON.parse(localStorage.getItem('task-helper-history') || '[]');
+let currentAccount = null;
+let created = [];
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (v='') => v.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+
+function historyStorageKey() { return currentAccount ? `task-helper-history-${currentAccount.user.id}` : null; }
+function loadHistory() { const key = historyStorageKey(); try { created = key ? JSON.parse(localStorage.getItem(key) || '[]') : []; } catch { created = []; } }
+function saveHistory() { const key = historyStorageKey(); if (key) localStorage.setItem(key, JSON.stringify(created)); }
+function applyAccount(account) {
+  currentAccount = account;
+  loadHistory();
+  activeProfile = { ...activeProfile, defaultPriority: account.settings.defaultPriority, timezone: account.settings.timezone };
+  $('#profile-button').innerHTML = `${escapeHtml(account.user.displayName)} <span>⌄</span>`;
+}
 
 function iso(date) { return date.toISOString().slice(0, 10); }
 function nextWeekday(day) { const now = new Date(); const delta = ((day - now.getDay() + 7) % 7) || 7; now.setDate(now.getDate() + delta); return iso(now); }
@@ -107,7 +118,7 @@ async function createTask() {
       start: $('#draft-start').value, deadline: $('#draft-deadline').value, priority: $('#draft-priority').value, unique,
     });
     const task = { key: result.key, url: result.url, title, queue: trackerDefaults.queueKey, createdAt: new Date().toISOString(), deadline: $('#draft-deadline').value, priority: $('#draft-priority').value, sprint: window.currentDraft.sprint?.name };
-    created.unshift(task); localStorage.setItem('task-helper-history', JSON.stringify(created)); toast(`Задача ${task.key} создана в Tracker.`); renderHistory();
+    created.unshift(task); saveHistory(); toast(`Задача ${task.key} создана в Tracker.`); renderHistory();
     document.querySelectorAll('.workflow-step').forEach((e,i)=>{e.classList.toggle('current',i===2);});
   } catch (error) {
     toast(error.message);
@@ -117,16 +128,38 @@ async function createTask() {
 }
 function renderHistory() { const list=$('#history-list'); if(!created.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">◷</div><h2>Пока нет созданных задач</h2><p>Здесь появится история после подтверждения черновика.</p></div>';return;} list.innerHTML=created.map(t=>`<article class="history-item card"><div><h3>${escapeHtml(t.title)}</h3><p>${t.queue} · ${t.sprint || 'спринт не указан'} · ${t.deadline ? 'до '+formatDate(t.deadline) : 'без дедлайна'}</p></div>${t.url?`<a class="key" href="${escapeHtml(t.url)}" target="_blank" rel="noopener">${escapeHtml(t.key)}</a>`:`<span class="key">${escapeHtml(t.key)}</span>`}</article>`).join(''); }
 function trackerOption(items, selectedId, placeholder) { return `<option value="">${placeholder}</option>${items.map(item=>`<option value="${escapeHtml(String(item.id))}" ${String(item.id)===String(selectedId)?'selected':''}>${escapeHtml(item.name)}</option>`).join('')}`; }
+function accountSettingsHtml() {
+  if (!currentAccount) return '';
+  const { user, settings } = currentAccount;
+  return `<section class="settings-card card"><div class="settings-heading"><div><h3>Мой профиль</h3><p>Настройки доступны только владельцу аккаунта.</p></div></div>
+    <div class="settings-field"><label for="account-email">Email</label><input id="account-email" type="email" maxlength="254" value="${escapeHtml(user.email)}"></div>
+    <div class="settings-field"><label for="account-display-name">Имя</label><input id="account-display-name" maxlength="80" value="${escapeHtml(user.displayName)}"></div>
+    <div class="settings-field"><label for="account-timezone">Часовой пояс</label><input id="account-timezone" maxlength="80" value="${escapeHtml(settings.timezone)}" placeholder="Europe/Moscow"></div>
+    <div class="settings-field"><label for="account-default-priority">Приоритет новых задач</label><select id="account-default-priority"><option value="blocker">Блокер</option><option value="critical">Высокий</option><option value="normal">Обычный</option><option value="minor">Низкий</option></select></div>
+    <div class="settings-actions"><button id="save-account-settings" class="primary" type="button">Сохранить профиль</button></div><p id="account-settings-error" class="form-error"></p><p id="account-settings-result" class="connection-result" aria-live="polite"></p></section>`;
+}
+function bindAccountSettings() {
+  const button = $('#save-account-settings'); if (!button || !currentAccount) return;
+  $('#account-default-priority').value = currentAccount.settings.defaultPriority;
+  button.onclick = async () => {
+    const error = $('#account-settings-error'); const result = $('#account-settings-result'); error.textContent = ''; result.textContent = ''; button.disabled = true;
+    try {
+      const account = await api('/api/account/settings', { email: $('#account-email').value, displayName: $('#account-display-name').value, timezone: $('#account-timezone').value, defaultPriority: $('#account-default-priority').value });
+      applyAccount(account); applyTrackerDefaults(); result.textContent = 'Профиль сохранён.';
+    } catch (requestError) { error.textContent = requestError.message; } finally { button.disabled = false; }
+  };
+}
 function renderProfiles() {
   const list = $('#profiles-list');
   if (!trackerCatalog) {
-    list.innerHTML = `<section class="settings-card card"><h3>Данные из Tracker</h3><p class="settings-description">${trackerRoutingError ? escapeHtml(trackerRoutingError) : 'Загружаем доступные проекты и доски…'}</p><button id="refresh-tracker-defaults" class="secondary">Обновить</button></section>`;
+    list.innerHTML = `${accountSettingsHtml()}<section class="settings-card card"><h3>Данные из Tracker</h3><p class="settings-description">${trackerRoutingError ? escapeHtml(trackerRoutingError) : 'Загружаем доступные проекты и доски…'}</p><button id="refresh-tracker-defaults" class="secondary">Обновить</button></section>`;
+    bindAccountSettings();
     $('#refresh-tracker-defaults').onclick = () => loadTrackerRouting(true);
     if (!trackerRoutingError) loadTrackerRouting();
     return;
   }
   const selectedBoard = trackerCatalog.boards.find(board => board.id === trackerDefaults.boardId);
-  list.innerHTML = `<section class="settings-card card">
+  list.innerHTML = `${accountSettingsHtml()}<section class="settings-card card">
     <div class="settings-heading"><div><h3>Маршрутизация новых задач</h3><p>Справочники загружаются из подключённого Яндекс Трекера.</p></div><button id="refresh-tracker-defaults" class="secondary" type="button">Обновить</button></div>
     <div class="settings-field"><label for="default-queue">Очередь</label><select id="default-queue">${trackerOption(trackerCatalog.queues,trackerDefaults.queueKey,'Выберите очередь по умолчанию')}</select><small>Очередь обязательна для создания задач.</small></div>
     <div class="settings-field"><label for="default-project">Проект</label><select id="default-project">${trackerOption(trackerCatalog.projects,trackerDefaults.projectId,'Не назначать проект по умолчанию')}</select></div>
@@ -135,6 +168,7 @@ function renderProfiles() {
     <div class="settings-actions"><button id="save-tracker-defaults" class="primary" type="button">Сохранить настройки</button></div>
     <p id="tracker-defaults-error" class="form-error"></p><p id="tracker-defaults-result" class="connection-result" aria-live="polite"></p>
   </section>`;
+  bindAccountSettings();
   $('#refresh-tracker-defaults').onclick = () => loadTrackerRouting(true);
   $('#default-board').onchange = async () => {
     trackerDefaults.boardId = $('#default-board').value;
@@ -153,7 +187,7 @@ function applyTrackerDefaults() {
   $('#profile-name').textContent = activeProfile.name;
   $('#profile-queue').textContent = queue?.key || 'Не выбрана';
   $('#profile-board').textContent = board?.name || 'Не выбрана';
-  $('#profile-button').innerHTML = `${activeProfile.name} <span>⌄</span>`;
+  $('#profile-timezone').textContent = activeProfile.timezone || 'Europe/Moscow';
 }
 async function loadTrackerSprints(boardId) {
   try {
@@ -198,7 +232,7 @@ async function saveTrackerDefaults() {
     error.textContent = requestError.message;
   } finally { button.disabled = false; }
 }
-function selectProfile(id) { activeProfile=profiles.find(p=>p.id===id); $('#profile-name').textContent=activeProfile.name; $('#profile-queue').textContent=activeProfile.queue; $('#profile-board').textContent=activeProfile.board; $('#profile-button').innerHTML=`${activeProfile.name} <span>⌄</span>`; renderProfiles(); toast(`Выбран профиль «${activeProfile.name}».`); }
+function selectProfile(id) { activeProfile={...profiles.find(p=>p.id===id),timezone:currentAccount?.settings.timezone || 'Europe/Moscow'}; $('#profile-name').textContent=activeProfile.name; $('#profile-queue').textContent=activeProfile.queue; $('#profile-board').textContent=activeProfile.board; $('#profile-timezone').textContent=activeProfile.timezone; renderProfiles(); toast(`Выбран профиль «${activeProfile.name}».`); }
 function switchView(view) { ['create','history','profiles','tracker-settings'].forEach(v=>{$(`#${v}-view`).hidden=v!==view;}); $('#page-title').textContent=({create:'Новая задача',history:'Последние задачи',profiles:'Настройки по умолчанию','tracker-settings':'Подключение Tracker'})[view]; document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.view===view)); if(view==='history')renderHistory();if(view==='profiles')renderProfiles();if(view==='tracker-settings')refreshTrackerConnection(true); }
 let toastTimer; function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show-toast');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show-toast'),3400);}
 async function api(path, body, method = 'POST') { const response = await fetch(path, {method,headers:{'Content-Type':'application/json'},credentials:'same-origin',body:method === 'GET' ? undefined : JSON.stringify(body || {})}); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Не удалось выполнить запрос.'); return data; }
@@ -277,10 +311,12 @@ function setupTrackerConnection() {
 }
 async function setupAuth() {
   const gate=$('#auth-gate'), setup=$('#setup-form'), login=$('#login-form');
-  try { const state=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json()); if(state.authenticated){gate.hidden=true;refreshTrackerConnection();return;} (state.needsSetup?setup:login).hidden=false; }
-  catch { login.hidden=false; $('#login-error').textContent='Нет соединения с сервером.'; }
-  setup.onsubmit=async(e)=>{e.preventDefault();const password=$('#setup-password').value,confirm=$('#setup-confirm').value;$('#setup-error').textContent='';if(password!==confirm){$('#setup-error').textContent='Пароли не совпадают.';return;}try{await api('/api/auth/setup',{password});gate.hidden=true;refreshTrackerConnection();}catch(err){$('#setup-error').textContent=err.message;}};
-  login.onsubmit=async(e)=>{e.preventDefault();$('#login-error').textContent='';try{await api('/api/auth/login',{password:$('#login-password').value});gate.hidden=true;refreshTrackerConnection();}catch(err){$('#login-error').textContent=err.message;}};
+  const show = (form) => { setup.hidden = form !== setup; login.hidden = form !== login; };
+  $('#show-login').onclick = () => show(login); $('#show-register').onclick = () => show(setup);
+  try { const state=await fetch('/api/auth/status',{credentials:'same-origin'}).then(r=>r.json()); if(state.authenticated && state.account){applyAccount(state.account);gate.hidden=true;refreshTrackerConnection();return;} show(login); }
+  catch { show(login); $('#login-error').textContent='Нет соединения с сервером.'; }
+  setup.onsubmit=async(e)=>{e.preventDefault();const password=$('#setup-password').value,confirm=$('#setup-confirm').value;$('#setup-error').textContent='';if(password!==confirm){$('#setup-error').textContent='Пароли не совпадают.';return;}try{const result=await api('/api/auth/register',{displayName:$('#setup-name').value,email:$('#setup-email').value,password});applyAccount(result.account);gate.hidden=true;refreshTrackerConnection();}catch(err){$('#setup-error').textContent=err.message;}};
+  login.onsubmit=async(e)=>{e.preventDefault();$('#login-error').textContent='';try{const result=await api('/api/auth/login',{email:$('#login-email').value,password:$('#login-password').value});applyAccount(result.account);gate.hidden=true;refreshTrackerConnection();}catch(err){$('#login-error').textContent=err.message;}};
 }
-function init() { $('#source-text').addEventListener('input', e=>$('#char-count').textContent=`${e.target.value.length} / 3000`); $('#generate-button').onclick=()=>showDraft(); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view)); $('#profile-button').onclick=()=>switchView('profiles'); $('#logout-button').onclick=async()=>{try{await api('/api/auth/logout');location.reload();}catch{toast('Не удалось завершить сессию.');}}; renderHistory(); setupTrackerConnection(); setupAuth(); }
+function init() { $('#source-text').addEventListener('input', e=>$('#char-count').textContent=`${e.target.value.length} / 3000`); $('#generate-button').onclick=()=>showDraft(); document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view)); $('#profile-button').onclick=()=>switchView('profiles'); $('#logout-button').onclick=async()=>{try{await api('/api/auth/logout');location.reload();}catch{toast('Не удалось завершить сессию.');}}; setupTrackerConnection(); setupAuth(); }
 init();

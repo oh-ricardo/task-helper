@@ -6,7 +6,7 @@ function buildTaskDraftPrompt({ text, profile, today, normalizedDeadline }) {
     'Не выдумывай факты. Не меняй нормализованный дедлайн, переданный ниже.',
     `Текущая дата в часовом поясе профиля: ${today}.`,
     `Нормализованный дедлайн: ${normalizedDeadline || 'не определён'}.`,
-    `Профиль маршрутизации: очередь ${profile.queue || 'не указана'}, доска ${profile.board || 'не указана'}, часовой пояс ${profile.timezone || 'Europe/Moscow'}.`,
+    `Профиль маршрутизации: очередь ${profile.queue || 'не указана'}, доска ${profile.board || 'не указана'}, часовой пояс ${profile.timezone || 'Europe/Moscow'}, приоритет по умолчанию ${profile.defaultPriority || 'normal'}.`,
     `Текст пользователя: ${text}`,
   ].join('\n');
 }

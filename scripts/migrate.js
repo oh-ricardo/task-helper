@@ -15,9 +15,28 @@ async function migrate() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       password_salt TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  // Поддержка базы, созданной предыдущей однопользовательской версией.
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT');
+  await pool.query("UPDATE users SET email = 'legacy-' || id || '@local.invalid' WHERE email IS NULL");
+  await pool.query("UPDATE users SET display_name = 'Пользователь ' || id WHERE display_name IS NULL");
+  await pool.query('ALTER TABLE users ALTER COLUMN email SET NOT NULL');
+  await pool.query('ALTER TABLE users ALTER COLUMN display_name SET NOT NULL');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email)');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      timezone TEXT NOT NULL DEFAULT 'Europe/Moscow',
+      default_priority TEXT NOT NULL DEFAULT 'normal',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT user_settings_priority_check CHECK (default_priority IN ('blocker', 'critical', 'normal', 'minor'))
     )
   `);
   await pool.query(`
@@ -41,7 +60,7 @@ async function migrate() {
     )
   `);
   await pool.query('ALTER TABLE tracker_defaults ADD COLUMN IF NOT EXISTS queue_key TEXT');
-  console.log('Migration completed: users, tracker_connections and tracker_defaults tables are ready.');
+  console.log('Migration completed: users, user_settings, tracker_connections and tracker_defaults tables are ready.');
 }
 
 migrate()

@@ -10,25 +10,34 @@
     <section id="auth-gate" class="auth-gate" aria-live="polite">
       <form id="setup-form" class="auth-card" hidden>
         <div class="auth-logo"><span class="brand-mark">✓</span> Task Helper</div>
-        <p class="eyebrow">Первый вход</p>
-        <h1>Установите пароль</h1>
-        <p>Он защитит доступ к вашему рабочему пространству на этом сервере.</p>
+        <p class="eyebrow">Регистрация</p>
+        <h1>Создайте аккаунт</h1>
+        <p>Настройки и подключение Tracker будут доступны только вам.</p>
+        <label for="setup-name">Имя</label>
+        <input id="setup-name" type="text" autocomplete="name" minlength="2" maxlength="80" required />
+        <label for="setup-email">Email</label>
+        <input id="setup-email" type="email" autocomplete="email" maxlength="254" required />
         <label for="setup-password">Пароль</label>
         <input id="setup-password" type="password" autocomplete="new-password" minlength="12" required />
         <label for="setup-confirm">Повторите пароль</label>
         <input id="setup-confirm" type="password" autocomplete="new-password" minlength="12" required />
         <button class="primary" type="submit">Продолжить <span>→</span></button>
         <p class="form-error" id="setup-error"></p>
+        <button id="show-login" class="auth-switch" type="button">Уже есть аккаунт? Войти</button>
       </form>
       <form id="login-form" class="auth-card" hidden>
         <div class="auth-logo"><span class="brand-mark">✓</span> Task Helper</div>
         <p class="eyebrow">Защищённый вход</p>
-        <h1>Введите пароль</h1>
-        <p>Используйте пароль, установленный при первом входе.</p>
+        <h1>Войдите в аккаунт</h1>
+        <p>Используйте email и пароль вашей учётной записи.</p>
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="email" />
+        <small class="auth-hint">Если это аккаунт прежней версии, оставьте поле пустым и после входа укажите email в профиле.</small>
         <label for="login-password">Пароль</label>
         <input id="login-password" type="password" autocomplete="current-password" required />
         <button class="primary" type="submit">Войти <span>→</span></button>
         <p class="form-error" id="login-error"></p>
+        <button id="show-register" class="auth-switch" type="button">Нет аккаунта? Зарегистрироваться</button>
       </form>
     </section>
     <main class="app-shell">
@@ -76,7 +85,7 @@
               <dl>
                 <div><dt>Очередь</dt><dd id="profile-queue">INFRA</dd></div>
                 <div><dt>Доска</dt><dd id="profile-board">Платформа · Канбан</dd></div>
-                <div><dt>Часовой пояс</dt><dd>Europe/Moscow</dd></div>
+                <div><dt>Часовой пояс</dt><dd id="profile-timezone">Europe/Moscow</dd></div>
               </dl>
               <button class="text-button" data-view="profiles">Настроить профиль →</button>
             </aside>
