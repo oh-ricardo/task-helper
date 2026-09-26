@@ -32,6 +32,29 @@ npm run db:migrate
 npm start
 ```
 
+## Продакшен в Timeweb
+
+Приложение развёртывается из ветки `main`: после `git push origin main` Timeweb App Platform запускает автодеплой. Для production требуется PostgreSQL: файловый fallback предназначен только для локального запуска.
+
+1. Создайте PostgreSQL DBaaS и отдельную БД для приложения.
+2. Включите публичный IPv4 базы и обязательный TLS, если App Platform не подключён к той же приватной сети. После этого укажите в `DATABASE_URL` внешний хост базы.
+3. Выполните миграцию один раз с машины, имеющей доступ к базе: `npm run db:migrate`.
+4. В панели Timeweb задайте переменные окружения и перезапустите приложение.
+
+```text
+DATABASE_URL=postgresql://<user>:<url-encoded-password>@<host>:5432/<database>
+DATABASE_SSL=true
+HOST=0.0.0.0
+COOKIE_SECURE=true
+TRACKER_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+GIGACHAT_CREDENTIALS=<authorization-key>
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_MODEL=GigaChat-2-Pro
+GIGACHAT_BASE_URL=https://gigachat.devices.sberbank.ru/api/v1
+```
+
+Не храните строку подключения, OAuth-токены, ключ шифрования и ключ GigaChat в Git или документации. После замены хоста, пароля или иных переменных окружения приложение нужно перезапускать. Подробный порядок и диагностика — в [docs/architecture.md](docs/architecture.md#продакшен-в-timeweb).
+
 ## Граница прототипа
 
 При первом входе сервер предлагает установить пароль от 12 символов. При заданном `DATABASE_URL` хеш и соль сохраняются в PostgreSQL; без него действует временный файловый fallback `.data/auth.json`. Хеширование использует PBKDF2-SHA-512 с уникальной солью, браузер получает только `HttpOnly`, `SameSite=Strict` сессию на 8 часов. Файл с данными и `.env` исключены из репозитория.
