@@ -9,10 +9,8 @@ const { generateTaskDraft, GigaChatError } = require('./lib/gigachat');
 const logger = require('./lib/logger');
 const {
   TrackerConnectionError,
-  decryptConnectionSettings,
-  encryptConnectionSettings,
-  validateConnectionSettings,
 } = require('./lib/tracker-connection');
+const { trackerConnectionStatus, trackerHeaders } = require('./lib/yandex-iam');
 
 const root = __dirname;
 const stateDir = process.env.DATA_DIR || path.join(root, '.data');
@@ -128,20 +126,11 @@ function session(response, userId) { const id=crypto.randomBytes(32).toString('b
 function clearSession(request, response) { const id=parseCookies(request).task_helper_session; if(id) sessions.delete(id); response.setHeader('Set-Cookie', `task_helper_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookie?'; Secure':''}`); }
 function body(request) { return new Promise((resolve,reject)=>{let raw='';request.on('data',chunk=>{raw+=chunk;if(raw.length>16384)request.destroy();});request.on('end',()=>{try{resolve(JSON.parse(raw||'{}'));}catch{reject(new Error('Некорректный запрос.'));}});request.on('error',reject);}); }
 function staticFile(request, response) { const url = new URL(request.url, `http://${request.headers.host}`); const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1); if (!/^[a-zA-Z0-9._-]+$/.test(file)) return send(response,404,{error:'Не найдено'}); const full = path.join(root,file); if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) return send(response,404,{error:'Не найдено'}); const type = ({html:'text/html; charset=utf-8',js:'application/javascript; charset=utf-8',css:'text/css; charset=utf-8'})[path.extname(full).slice(1)] || 'application/octet-stream'; response.writeHead(200,{'Content-Type':type,'X-Content-Type-Options':'nosniff'});fs.createReadStream(full).pipe(response); }
-async function trackerSettings(userId) {
-  if (!pool) throw new TrackerConnectionError('Для работы с Tracker требуется PostgreSQL.', 503);
-  const { rows } = await pool.query(
-    'SELECT encrypted_payload, encryption_iv, authentication_tag FROM tracker_connections WHERE user_id = $1',
-    [userId],
-  );
-  if (!rows[0]) throw new TrackerConnectionError('Сначала сохраните параметры подключения к Tracker.', 409);
-  return decryptConnectionSettings(rows[0]);
-}
-async function trackerGet(settings, path) {
+async function trackerGet(path) {
   let response;
   try {
     response = await fetch(`https://api.tracker.yandex.net/v3${path}`, {
-      headers: { Authorization: `OAuth ${settings.token}`, [settings.orgHeader]: settings.orgId },
+      headers: await trackerHeaders(),
       signal: AbortSignal.timeout(10000),
     });
   } catch (error) {
@@ -153,7 +142,7 @@ async function trackerGet(settings, path) {
   if (!response.ok) {
     logger.warn('tracker.request_rejected', { method: 'GET', path, status: response.status });
     const message = response.status === 401
-      ? 'Tracker отклонил токен. Сохраните подключение с новым токеном.'
+      ? 'Tracker отклонил IAM-токен сервисного аккаунта. Повторите запрос; если ошибка не исчезает, проверьте доступ аккаунта.'
       : response.status === 403
         ? 'У пользователя нет прав получить эти данные из Tracker.'
         : `Tracker вернул ошибку ${response.status}.`;
@@ -161,12 +150,12 @@ async function trackerGet(settings, path) {
   }
   return payload;
 }
-async function trackerPost(settings, path, payload) {
+async function trackerPost(path, payload) {
   let response;
   try {
     response = await fetch(`https://api.tracker.yandex.net/v3${path}`, {
       method: 'POST',
-      headers: { Authorization: `OAuth ${settings.token}`, [settings.orgHeader]: settings.orgId, 'Content-Type':'application/json' },
+      headers: { ...(await trackerHeaders()), 'Content-Type':'application/json' },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     });
@@ -179,7 +168,7 @@ async function trackerPost(settings, path, payload) {
   if (!response.ok) {
     logger.warn('tracker.request_rejected', { method: 'POST', path, status: response.status });
     const message = response.status === 401
-      ? 'Tracker отклонил токен. Сохраните подключение с новым токеном.'
+      ? 'Tracker отклонил IAM-токен сервисного аккаунта. Повторите запрос; если ошибка не исчезает, проверьте доступ аккаунта.'
       : response.status === 403
         ? 'У пользователя нет права создавать задачи в выбранной очереди.'
         : response.status === 409
@@ -228,62 +217,20 @@ async function handleRequest(request,response) {
   if (request.method === 'GET' && request.url === '/api/tracker/connection') {
     const userId = authenticatedUserId(request);
     if (!userId) return send(response,401,{error:'Требуется вход.'});
-    if (!pool) return send(response,503,{error:'Для хранения подключения к Tracker требуется PostgreSQL.'});
-    try {
-      const { rows } = await pool.query('SELECT updated_at FROM tracker_connections WHERE user_id = $1', [userId]);
-      return send(response,200,{configured:Boolean(rows[0]),updatedAt:rows[0]?.updated_at || null});
-    } catch (error) {
-      logger.error('tracker.connection_status_failed', { userId, error });
-      return send(response,500,{error:'Не удалось получить состояние подключения к Tracker.'});
-    }
-  }
-  if (request.method === 'POST' && request.url === '/api/tracker/connection') {
-    const userId = authenticatedUserId(request);
-    if (!userId) return send(response,401,{error:'Требуется вход.'});
-    if (!pool) return send(response,503,{error:'Для хранения подключения к Tracker требуется PostgreSQL.'});
-    try {
-      const settings = validateConnectionSettings(await body(request));
-      const encrypted = encryptConnectionSettings(settings);
-      await pool.query(
-        `INSERT INTO tracker_connections (user_id, encrypted_payload, encryption_iv, authentication_tag)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (user_id) DO UPDATE SET
-           encrypted_payload = EXCLUDED.encrypted_payload,
-           encryption_iv = EXCLUDED.encryption_iv,
-           authentication_tag = EXCLUDED.authentication_tag,
-           updated_at = now()`,
-        [userId, encrypted.encryptedPayload, encrypted.encryptionIv, encrypted.authenticationTag],
-      );
-      logger.info('tracker.connection_saved', { userId });
-      return send(response,200,{configured:true});
-    } catch (error) {
-      const status = error instanceof TrackerConnectionError ? error.statusCode : 500;
-      logger.error('tracker.connection_save_failed', { userId, error });
-      return send(response,status,{error:error.message || 'Не удалось сохранить подключение к Tracker.'});
-    }
+    return send(response,200,trackerConnectionStatus());
   }
   if (request.method === 'POST' && request.url === '/api/tracker/connection/test') {
     const userId = authenticatedUserId(request);
     if (!userId) return send(response,401,{error:'Требуется вход.'});
-    if (!pool) return send(response,503,{error:'Для хранения подключения к Tracker требуется PostgreSQL.'});
     try {
-      const { rows } = await pool.query(
-        'SELECT encrypted_payload, encryption_iv, authentication_tag FROM tracker_connections WHERE user_id = $1',
-        [userId],
-      );
-      if (!rows[0]) return send(response,409,{error:'Сначала сохраните параметры подключения к Tracker.'});
-      const settings = decryptConnectionSettings(rows[0]);
       const trackerResponse = await fetch('https://api.tracker.yandex.net/v3/myself', {
-        headers: {
-          Authorization: `OAuth ${settings.token}`,
-          [settings.orgHeader]: settings.orgId,
-        },
+        headers: await trackerHeaders(),
         signal: AbortSignal.timeout(10000),
       });
       const trackerUser = await trackerResponse.json().catch(() => null);
       if (!trackerResponse.ok) {
         const message = trackerResponse.status === 401
-          ? 'Tracker отклонил токен. Проверьте его и сохраните подключение заново.'
+          ? 'Tracker отклонил IAM-токен сервисного аккаунта. Проверьте ключ и доступ в Tracker.'
           : trackerResponse.status === 403
             ? 'У этого пользователя нет прав на доступ к Tracker.'
             : trackerResponse.status === 429
@@ -308,11 +255,10 @@ async function handleRequest(request,response) {
     const userId = authenticatedUserId(request);
     if (!userId) return send(response,401,{error:'Требуется вход.'});
     try {
-      const settings = await trackerSettings(userId);
       const [projects, boards, queues] = await Promise.all([
-        trackerGet(settings, '/projects?expand=queues'),
-        trackerGet(settings, '/boards'),
-        trackerGet(settings, '/queues?perPage=50'),
+        trackerGet('/projects?expand=queues'),
+        trackerGet('/boards'),
+        trackerGet('/queues?perPage=50'),
       ]);
       return send(response,200,{
         queues: Array.isArray(queues) ? queues.map((queue) => ({
@@ -336,8 +282,7 @@ async function handleRequest(request,response) {
     const userId = authenticatedUserId(request);
     if (!userId) return send(response,401,{error:'Требуется вход.'});
     try {
-      const settings = await trackerSettings(userId);
-      const sprints = await trackerGet(settings, `/boards/${encodeURIComponent(sprintMatch[1])}/sprints`);
+      const sprints = await trackerGet(`/boards/${encodeURIComponent(sprintMatch[1])}/sprints`);
       return send(response,200,{sprints: Array.isArray(sprints) ? sprints.filter((sprint) => !sprint.archived).map((sprint) => ({
         id: String(sprint.id), name: sprint.name || `Спринт ${sprint.id}`, status: sprint.status || '',
         startDate: sprint.startDate || '', endDate: sprint.endDate || '',
@@ -414,8 +359,7 @@ async function handleRequest(request,response) {
         if (!Number.isSafeInteger(numericProjectId)) throw new TrackerConnectionError('Некорректный проект по умолчанию. Выберите его заново.', 400);
         issue.project = { primary: numericProjectId };
       }
-      const settings = await trackerSettings(userId);
-      const trackerIssue = await trackerPost(settings, '/issues', issue);
+      const trackerIssue = await trackerPost('/issues', issue);
       const created = Array.isArray(trackerIssue) ? trackerIssue[0] : trackerIssue;
       if (!created?.key) throw new TrackerConnectionError('Tracker не вернул ключ созданной задачи.', 502);
       logger.info('tracker.issue_created', { userId, issueKey: created.key, queueKey, hasProject: Boolean(projectId), hasSprint: Boolean(sprintId), priority });
@@ -424,19 +368,6 @@ async function handleRequest(request,response) {
       const status = error instanceof TrackerConnectionError ? error.statusCode : 500;
       logger.error('tracker.issue_creation_failed', { userId, error });
       return send(response,status,{error:error.message || 'Не удалось создать задачу в Tracker.'});
-    }
-  }
-  if (request.method === 'DELETE' && request.url === '/api/tracker/connection') {
-    const userId = authenticatedUserId(request);
-    if (!userId) return send(response,401,{error:'Требуется вход.'});
-    if (!pool) return send(response,503,{error:'Для хранения подключения к Tracker требуется PostgreSQL.'});
-    try {
-      await pool.query('DELETE FROM tracker_connections WHERE user_id = $1', [userId]);
-      logger.info('tracker.connection_deleted', { userId });
-      return send(response,200,{configured:false});
-    } catch (error) {
-      logger.error('tracker.connection_deletion_failed', { userId, error });
-      return send(response,500,{error:'Не удалось удалить подключение к Tracker.'});
     }
   }
   if (request.method === 'POST' && request.url === '/api/drafts/generate') { const userId = authenticatedUserId(request); if (!userId) return send(response,401,{error:'Требуется вход.'}); try { const {text, profile}=await body(request); if(typeof text!=='string'||!text.trim()) return send(response,400,{error:'Введите описание задачи.'}); const draft=await generateTaskDraft(text.trim(), profile || {}); logger.info('draft.generated', { userId, textLength: text.trim().length }); return send(response,200,draft); } catch (error) { const status=error instanceof GigaChatError ? error.statusCode : 500; logger.error('draft.generation_failed', { userId, error }); return send(response,status,{error:error.message || 'Не удалось сформировать черновик.'}); } }

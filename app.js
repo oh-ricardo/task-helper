@@ -239,7 +239,7 @@ async function api(path, body, method = 'POST') { const response = await fetch(p
 function renderTrackerConnectionStatus(status) {
   const configured = Boolean(status?.configured);
   $('#tracker-status').textContent = configured ? '● Tracker настроен' : '● Tracker не настроен';
-  $('#disconnect-tracker-button').hidden = !configured;
+  if (!configured && status?.error) $('#tracker-connection-error').textContent = status.error;
 }
 async function refreshTrackerConnection(showError = false) {
   try {
@@ -253,30 +253,6 @@ async function refreshTrackerConnection(showError = false) {
   }
 }
 function setupTrackerConnection() {
-  const form = $('#tracker-connection-form');
-  form.onsubmit = async (event) => {
-    event.preventDefault();
-    const error = $('#tracker-connection-error');
-    $('#tracker-connection-result').textContent = '';
-    const submit = form.querySelector('button[type="submit"]');
-    error.textContent = '';
-    submit.disabled = true;
-    try {
-      await api('/api/tracker/connection', {
-        token: $('#tracker-token').value,
-        orgId: $('#tracker-org-id').value,
-        orgHeader: $('#tracker-org-header').value,
-      });
-      $('#tracker-token').value = '';
-      $('#tracker-org-id').value = '';
-      await refreshTrackerConnection();
-      toast('Параметры подключения к Tracker сохранены.');
-    } catch (requestError) {
-      error.textContent = requestError.message;
-    } finally {
-      submit.disabled = false;
-    }
-  };
   $('#test-tracker-button').onclick = async () => {
     const button = $('#test-tracker-button');
     const error = $('#tracker-connection-error');
@@ -293,19 +269,6 @@ function setupTrackerConnection() {
     } finally {
       button.disabled = false;
       button.textContent = 'Проверить подключение';
-    }
-  };
-  $('#disconnect-tracker-button').onclick = async () => {
-    if (!window.confirm('Удалить сохранённое подключение к Яндекс Трекеру?')) return;
-    const error = $('#tracker-connection-error');
-    error.textContent = '';
-    $('#tracker-connection-result').textContent = '';
-    try {
-      await api('/api/tracker/connection', undefined, 'DELETE');
-      await refreshTrackerConnection();
-      toast('Подключение к Tracker удалено.');
-    } catch (requestError) {
-      error.textContent = requestError.message;
     }
   };
 }

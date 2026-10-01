@@ -106,30 +106,19 @@
         </section>
 
         <section id="tracker-settings-view" class="view" hidden>
-          <div class="section-intro"><h2>Подключение Яндекс Трекера</h2><p>Подключение действует для текущего рабочего пространства. OAuth-токен не отображается после сохранения.</p></div>
-          <form id="tracker-connection-form" class="settings-card card">
+          <div class="section-intro"><h2>Подключение Яндекс Трекера</h2><p>Доступ выполняется от сервисного аккаунта федерации через IAM-токен.</p></div>
+          <section class="settings-card card">
             <div class="settings-field">
-              <label for="tracker-org-header">Тип организации</label>
-              <select id="tracker-org-header" name="orgHeader">
-                <option value="X-Org-ID">Яндекс 360 для бизнеса</option>
-                <option value="X-Cloud-Org-ID">Yandex Cloud / Identity Hub</option>
-              </select>
+              <label>Организация</label>
+              <input value="bpf7jl9ghb35o2idt8iq" readonly />
+              <small>Заголовок запросов: <code>X-Cloud-Org-Id</code>.</small>
             </div>
-            <div class="settings-field">
-              <label for="tracker-org-id">Идентификатор организации</label>
-              <input id="tracker-org-id" name="orgId" type="text" maxlength="256" autocomplete="off" required />
-              <small>Откройте в Tracker: «Администрирование → Организации».</small>
-            </div>
-            <div class="settings-field">
-              <label for="tracker-token">OAuth-токен</label>
-              <input id="tracker-token" name="token" type="password" maxlength="4096" autocomplete="off" spellcheck="false" required />
-              <small>Токен передаётся по HTTPS и сохраняется в БД только в зашифрованном виде.</small>
-            </div>
-            <div class="settings-actions"><button class="primary" type="submit">Сохранить подключение</button><button id="test-tracker-button" class="secondary" type="button">Проверить подключение</button><button id="disconnect-tracker-button" class="secondary danger-button" type="button" hidden>Отключить Tracker</button></div>
+            <p class="settings-description">Авторизованный ключ сервисного аккаунта задаётся только в окружении сервера. JWT и IAM-токен не передаются в браузер и не сохраняются в БД.</p>
+            <div class="settings-actions"><button id="test-tracker-button" class="secondary" type="button">Проверить подключение</button></div>
             <p id="tracker-connection-error" class="form-error"></p>
             <p id="tracker-connection-result" class="connection-result" aria-live="polite"></p>
-          </form>
-          <div class="safe-note settings-note"><span>⌁</span> Не передавайте OAuth-токен в чат, письма или скриншоты. Для замены токена сохраните новое значение.</div>
+          </section>
+          <div class="safe-note settings-note"><span>⌁</span> Сервисный аккаунт должен быть добавлен в Tracker и в нужные очереди с необходимыми правами.</div>
         </section>
       </section>
     </main>

@@ -40,16 +40,6 @@ async function migrate() {
     )
   `);
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS tracker_connections (
-      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      encrypted_payload TEXT NOT NULL,
-      encryption_iv TEXT NOT NULL,
-      authentication_tag TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS tracker_defaults (
       user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       queue_key TEXT,
@@ -60,7 +50,7 @@ async function migrate() {
     )
   `);
   await pool.query('ALTER TABLE tracker_defaults ADD COLUMN IF NOT EXISTS queue_key TEXT');
-  console.log('Migration completed: users, user_settings, tracker_connections and tracker_defaults tables are ready.');
+  console.log('Migration completed: users, user_settings and tracker_defaults tables are ready.');
 }
 
 migrate()
